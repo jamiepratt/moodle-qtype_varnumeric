@@ -1,0 +1,6 @@
+quizattempt,firstname,lastname,responses.1.answer,responses.1.-submit,responses.1.-tryagain,variants.1,finished
+1,John,Jones,100,1,0,1,0
+1,John,Jones,100,0,1,1,0
+1,John,Jones,200,1,0,1,0
+1,John,Jones,200,0,1,1,0
+1,John,Jones,300,1,0,1,1

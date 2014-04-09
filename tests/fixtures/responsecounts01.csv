@@ -1,0 +1,4 @@
+slot,variant,subpart,modelresponse,actualresponse,totalcount,count1,count2,count3
+1,1,1,*,100,1,1,0,0
+1,1,1,*,200,1,0,1,0
+1,1,1,*,300,1,0,0,1

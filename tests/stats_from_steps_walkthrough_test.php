@@ -27,7 +27,7 @@
 defined('MOODLE_INTERNAL') || die();
 
 global $CFG;
-require_once($CFG->dirroot . '/mod/quiz/tests/attempt_walkthrough_from_csv_test.php');
+require_once($CFG->dirroot . '/mod/quiz/report/statistics/tests/stats_from_steps_walkthrough_test.php');
 require_once($CFG->dirroot . '/mod/quiz/report/default.php');
 require_once($CFG->dirroot . '/mod/quiz/report/statistics/report.php');
 require_once($CFG->dirroot . '/mod/quiz/report/reportlib.php');
@@ -41,7 +41,7 @@ require_once($CFG->dirroot . '/mod/quiz/report/reportlib.php');
  * @author     Jamie Pratt <me@jamiep.org>
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-class qtype_varnumeric_statistics_from_steps_testcase extends mod_quiz_attempt_walkthrough_from_csv_testcase {
+class qtype_varnumeric_statistics_from_steps_testcase extends quiz_report_statistics_from_steps_testcase {
 
     /**
      * @var quiz_statistics_report object to do stats calculations.
@@ -53,7 +53,7 @@ class qtype_varnumeric_statistics_from_steps_testcase extends mod_quiz_attempt_w
         return  __DIR__."/fixtures/{$setname}{$test}.csv";
     }
 
-    protected $files = array('questions', 'steps');
+    protected $files = array('questions', 'steps', 'responsecounts');
 
     /**
      * Create a quiz add questions to it, walk through quiz attempts and then check results.
@@ -63,60 +63,46 @@ class qtype_varnumeric_statistics_from_steps_testcase extends mod_quiz_attempt_w
      */
     public function test_walkthrough_from_csv($quizsettings, $csvdata) {
 
-        $this->resetAfterTest(true);
-        question_bank::get_qtype('random')->clear_caches_before_testing();
+        $this->create_quiz_simulate_attempts_and_check_results($quizsettings, $csvdata);
 
-        $this->create_quiz($quizsettings, $csvdata['questions']);
-
-        $attemptids = $this->walkthrough_attempts($csvdata['steps']);
-
-        $this->report = new quiz_statistics_report();
-        $whichattempts = QUIZ_GRADEAVERAGE;
-        $groupstudents = array();
-        $questions = $this->report->load_and_initialise_questions_for_calculations($this->quiz);
-        list($quizstats, $questionstats) = $this->report->get_all_stats_and_analysis($this->quiz,
-                                                                                      $whichattempts,
-                                                                                      question_attempt::LAST_TRY,
-                                                                                      $groupstudents,
-                                                                                      $questions);
-
-        $qubaids = quiz_statistics_qubaids_condition($this->quiz->id, $groupstudents, $whichattempts);
-
-        // We will create some quiz and question stat calculator instances and some response analyser instances, just in order
-        // to check the last calculated/analysed time.
-        $quizcalc = new \quiz_statistics\calculator();
-        // Should not be a delay of more than one second between the calculation of stats above and here.
-        $this->assertTimeCurrent($quizcalc->get_last_calculated_time($qubaids));
-
-        $qcalc = new \core_question\statistics\questions\calculator($questions);
-        $this->assertTimeCurrent($qcalc->get_last_calculated_time($qubaids));
-
-        $responesstats = new \core_question\statistics\responses\analyser($questions[1]);
-        $this->assertTimeCurrent($responesstats->get_last_analysed_time($qubaids, question_attempt::LAST_TRY));
-        $analysis = $responesstats->load_cached($qubaids, question_attempt::LAST_TRY);
-        $variantsnos = $analysis->get_variant_nos();
-
-        $this->assertEquals(array(1), $variantsnos);
-        $total = 0;
-        $subpartids = $analysis->get_subpart_ids(1);
-        $subpartid = current($subpartids);
-
-        $subpartanalysis = $analysis->get_analysis_for_subpart(1, $subpartid);
-        $classids = $subpartanalysis->get_response_class_ids();
-        foreach ($classids as $classid) {
-            $classanalysis = $subpartanalysis->get_response_class($classid);
-            $actualresponsecounts = $classanalysis->data_for_question_response_table('', '');
-            foreach ($actualresponsecounts as $actualresponsecount) {
-                $total += $actualresponsecount->count;
-            }
+        $whichattempts = QUIZ_GRADEAVERAGE; // All attempts.
+        if ($quizsettings['preferredbehaviour'] === 'deferredfeedback') {
+            $whichtries = question_attempt::LAST_TRY;
+        } else {
+            $whichtries = question_attempt::ALL_TRIES;
         }
-        $this->assertEquals(25, $total);
+        $groupstudents = array();
+        list($questions, $quizstats, $questionstats, $qubaids) =
+            $this->check_stats_calculations_and_response_analysis($csvdata, $whichattempts, $whichtries, $groupstudents);
 
-        $this->assertEquals(25, $questionstats->for_slot(1)->s);
-        $this->assertEquals(null, $questionstats->for_slot(1, 1));
-        $this->assertEquals(null, $questionstats->for_slot(1, 2));
-        $this->assertEquals(null, $questionstats->for_slot(1, 3));
-        $this->assertEquals(null, $questionstats->for_slot(1, 4));
-        $this->assertEquals(null, $questionstats->for_slot(1, 5));
+        if ($quizsettings['testnumber'] === '00') {
+            $responesstats = new \core_question\statistics\responses\analyser($questions[1]);
+            $this->assertTimeCurrent($responesstats->get_last_analysed_time($qubaids, $whichtries));
+            $analysis = $responesstats->load_cached($qubaids, $whichtries);
+            $variantsnos = $analysis->get_variant_nos();
+
+            $this->assertEquals(array(1), $variantsnos);
+            $total = 0;
+            $subpartids = $analysis->get_subpart_ids(1);
+            $subpartid = current($subpartids);
+
+            $subpartanalysis = $analysis->get_analysis_for_subpart(1, $subpartid);
+            $classids = $subpartanalysis->get_response_class_ids();
+            foreach ($classids as $classid) {
+                $classanalysis = $subpartanalysis->get_response_class($classid);
+                $actualresponsecounts = $classanalysis->data_for_question_response_table('', '');
+                foreach ($actualresponsecounts as $actualresponsecount) {
+                    $total += $actualresponsecount->totalcount;
+                }
+            }
+            $this->assertEquals(25, $total);
+
+            $this->assertEquals(25, $questionstats->for_slot(1)->s);
+            $this->assertEquals(null, $questionstats->for_slot(1, 1));
+            $this->assertEquals(null, $questionstats->for_slot(1, 2));
+            $this->assertEquals(null, $questionstats->for_slot(1, 3));
+            $this->assertEquals(null, $questionstats->for_slot(1, 4));
+            $this->assertEquals(null, $questionstats->for_slot(1, 5));
+        }
     }
 }

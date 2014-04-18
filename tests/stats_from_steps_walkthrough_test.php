@@ -74,13 +74,16 @@ class qtype_varnumeric_statistics_from_steps_testcase extends mod_quiz_attempt_w
         $whichattempts = QUIZ_GRADEAVERAGE;
         $groupstudents = array();
         $questions = $this->report->load_and_initialise_questions_for_calculations($this->quiz);
-        list($quizstats, $questionstats) =
-                        $this->report->get_all_stats_and_analysis($this->quiz, $whichattempts, $groupstudents, $questions);
+        list($quizstats, $questionstats) = $this->report->get_all_stats_and_analysis($this->quiz,
+                                                                                      $whichattempts,
+                                                                                      question_attempt::LAST_TRY,
+                                                                                      $groupstudents,
+                                                                                      $questions);
 
         $qubaids = quiz_statistics_qubaids_condition($this->quiz->id, $groupstudents, $whichattempts);
 
         // We will create some quiz and question stat calculator instances and some response analyser instances, just in order
-        // to check the time of the
+        // to check the last calculated/analysed time.
         $quizcalc = new \quiz_statistics\calculator();
         // Should not be a delay of more than one second between the calculation of stats above and here.
         $this->assertTimeCurrent($quizcalc->get_last_calculated_time($qubaids));
@@ -89,8 +92,8 @@ class qtype_varnumeric_statistics_from_steps_testcase extends mod_quiz_attempt_w
         $this->assertTimeCurrent($qcalc->get_last_calculated_time($qubaids));
 
         $responesstats = new \core_question\statistics\responses\analyser($questions[1]);
-        $this->assertTimeCurrent($responesstats->get_last_analysed_time($qubaids));
-        $analysis = $responesstats->load_cached($qubaids);
+        $this->assertTimeCurrent($responesstats->get_last_analysed_time($qubaids, question_attempt::LAST_TRY));
+        $analysis = $responesstats->load_cached($qubaids, question_attempt::LAST_TRY);
         $variantsnos = $analysis->get_variant_nos();
 
         $this->assertEquals(array(1), $variantsnos);
